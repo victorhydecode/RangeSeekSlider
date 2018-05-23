@@ -34,6 +34,55 @@ import UIKit
 
     open weak var delegate: RangeSeekSliderDelegate?
 
+    /// Enables the shadows under the slider handles. true = shadows will be shown. false = shadows will be hidden. Default is false.
+    @IBInspectable open var enableHandleShadows: Bool = false {
+        didSet {
+            if enableHandleShadows {
+                applySketchShadow(leftHandle, alpha: 0.2, blur: 5)
+                applySketchShadow(rightHandle, alpha: 0.2, blur: 5)
+            } else {
+                applySketchShadow(leftHandle, alpha: 0)
+                applySketchShadow(rightHandle, alpha: 0)
+            }
+        }
+    }
+
+    /// Enables the shadows and corner raddius under the labels. true = will be shown. false = will be hidden. Default is false.
+    @IBInspectable open var enableLabelsShadowsAndCorners: Bool = false {
+        didSet {
+            if enableLabelsShadowsAndCorners {
+                minLabel.cornerRadius = minLabel.frame.height / 2
+                maxLabel.cornerRadius = maxLabel.frame.height / 2
+                applySketchShadow(minLabel, alpha: 0.2, y: 0, blur: 3)
+                applySketchShadow(maxLabel, alpha: 0.2, y: 0, blur: 3)
+                minLabel.backgroundColor = UIColor.white.cgColor
+                maxLabel.backgroundColor = UIColor.white.cgColor
+            } else {
+                minLabel.cornerRadius = 0
+                maxLabel.cornerRadius = 0
+                applySketchShadow(minLabel, alpha: 0)
+                applySketchShadow(maxLabel, alpha: 0)
+                minLabel.backgroundColor = UIColor.clear.cgColor
+                maxLabel.backgroundColor = UIColor.clear.cgColor
+            }
+        }
+    }
+
+    /// Labels vertical padding
+    @IBInspectable open var labelsVerticalPadding: CGFloat = 4.0 {
+        didSet {
+            refresh()
+        }
+    }
+
+    /// Labels horizontal padding
+    @IBInspectable open var labelsHorizontalPadding: CGFloat = 8.0 {
+        didSet {
+            refresh()
+        }
+    }
+
+
     /// The minimum possible value to select in the range
     @IBInspectable open var minValue: CGFloat = 0.0 {
         didSet {
@@ -162,10 +211,10 @@ import UIKit
             guard let image = handleImage else {
                 return
             }
-            
+
             var handleFrame = CGRect.zero
             handleFrame.size = image.size
-            
+
             leftHandle.frame = handleFrame
             leftHandle.contents = image.cgImage
 
@@ -193,6 +242,16 @@ import UIKit
             updateLineHeight()
         }
     }
+
+    /// Set the slider line border (default 1.0)
+    @IBInspectable open var lineBorder: CGFloat = 1.0 {
+        didSet {
+            updateLineHeight()
+        }
+    }
+
+    /// The color of the line border. If not set, the default is the clear.
+    @IBInspectable open var lineBorderColor: UIColor = UIColor.clear
 
     /// Handle border width (default 0.0)
     @IBInspectable open var handleBorderWidth: CGFloat = 0.0 {
@@ -233,8 +292,8 @@ import UIKit
     private let leftHandle: CALayer = CALayer()
     private let rightHandle: CALayer = CALayer()
 
-    fileprivate let minLabel: CATextLayer = CATextLayer()
-    fileprivate let maxLabel: CATextLayer = CATextLayer()
+    fileprivate let minLabel: LCTextLayer = LCTextLayer()
+    fileprivate let maxLabel: LCTextLayer = LCTextLayer()
 
     private var minLabelTextSize: CGSize = .zero
     private var maxLabelTextSize: CGSize = .zero
@@ -469,6 +528,7 @@ import UIKit
                                   width: lineRightSide.x - lineLeftSide.x,
                                   height: lineHeight)
         sliderLine.cornerRadius = lineHeight / 2.0
+        sliderLine.borderWidth = lineBorder
         sliderLineBetweenHandles.cornerRadius = sliderLine.cornerRadius
     }
 
@@ -489,11 +549,19 @@ import UIKit
         }
 
         if let nsstring = minLabel.string as? NSString {
-            minLabelTextSize = nsstring.size(withAttributes: [.font: minLabelFont])
+            var size = nsstring.size(withAttributes: [.font: minLabelFont])
+            if size.width < size.height {
+                size = CGSize(width: size.height, height: size.height)
+            }
+            minLabelTextSize = CGSize(width: size.width + 2 * labelsHorizontalPadding, height: size.height + 2 * labelsVerticalPadding)
         }
 
         if let nsstring = maxLabel.string as? NSString {
-            maxLabelTextSize = nsstring.size(withAttributes: [.font: maxLabelFont])
+            var size = nsstring.size(withAttributes: [.font: maxLabelFont])
+            if size.width < size.height {
+                size = CGSize(width: size.height, height: size.height)
+            }
+            maxLabelTextSize = CGSize(width: size.width + 2 * labelsHorizontalPadding, height: size.height + 2 * labelsVerticalPadding)
         }
     }
 
@@ -516,6 +584,7 @@ import UIKit
             maxLabel.foregroundColor = maxLabelColor?.cgColor ?? tintCGColor
             sliderLineBetweenHandles.backgroundColor = colorBetweenHandles?.cgColor ?? tintCGColor
             sliderLine.backgroundColor = tintCGColor
+            sliderLine.borderColor = lineBorderColor.cgColor
 
             let color: CGColor
             if let _ = handleImage {
@@ -553,6 +622,11 @@ import UIKit
 
         minLabel.frame.size = minLabelTextSize
         maxLabel.frame.size = maxLabelTextSize
+
+        if enableLabelsShadowsAndCorners {
+            minLabel.cornerRadius = minLabel.frame.height / 2
+            maxLabel.cornerRadius = maxLabel.frame.height / 2
+        }
 
         if labelsFixed {
             updateFixedLabelPositions()
@@ -699,6 +773,27 @@ import UIKit
 
         CATransaction.commit()
     }
+
+    private func applySketchShadow(_ layer: CALayer,
+                                   color: UIColor = .black,
+                                   alpha: Float = 0.5,
+                                   x: CGFloat = 0,
+                                   y: CGFloat = 2,
+                                   blur: CGFloat = 4,
+                                   spread: CGFloat = 0) {
+        layer.shadowColor = color.cgColor
+        layer.shadowOpacity = alpha
+        layer.shadowOffset = CGSize(width: x, height: y)
+        layer.shadowRadius = blur / 2.0
+        if spread == 0 {
+            layer.shadowPath = nil
+        } else {
+            let dx = -spread
+            let rect = bounds.insetBy(dx: dx, dy: dx)
+            layer.shadowPath = UIBezierPath(rect: rect).cgPath
+        }
+    }
+
 }
 
 
@@ -758,5 +853,35 @@ private extension CGPoint {
         let distX: CGFloat = to.x - x
         let distY: CGFloat = to.y - y
         return sqrt(distX * distX + distY * distY)
+    }
+}
+
+public class LCTextLayer : CATextLayer {
+
+    // REF: http://lists.apple.com/archives/quartz-dev/2008/Aug/msg00016.html
+    // CREDIT: David Hoerl - https://github.com/dhoerl
+    // USAGE: To fix the vertical alignment issue that currently exists within the CATextLayer class. Change made to the yDiff calculation.
+
+    override init() {
+        super.init()
+    }
+
+    override init(layer: Any) {
+        super.init(layer: layer)
+    }
+
+    required public init(coder aDecoder: NSCoder) {
+        super.init(layer: aDecoder)
+    }
+
+    override public func draw(in ctx: CGContext) {
+        let height = self.bounds.size.height
+        let fontSize = self.fontSize
+        let yDiff = (height-fontSize)/2 - fontSize/10
+
+        ctx.saveGState()
+        ctx.translateBy(x: 0, y: yDiff)
+        super.draw(in: ctx)
+        ctx.restoreGState()
     }
 }
